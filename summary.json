@@ -1,0 +1,27 @@
+{
+  "corpus": "FLORES-200 devtest",
+  "sentences_per_language": 1012,
+  "languages": 204,
+  "vocabs": [
+    "cl100k_base",
+    "o200k_base"
+  ],
+  "pivot": "eng_Latn",
+  "pivot_tokens": {
+    "cl100k_base": 27182,
+    "o200k_base": 26873
+  },
+  "pivot_chars": 131966,
+  "mean_ratio": {
+    "cl100k_base": 3.3618,
+    "o200k_base": 2.1162
+  },
+  "max_ratio": {
+    "cl100k_base": "shn_Mymr",
+    "o200k_base": "sat_Olck"
+  },
+  "min_ratio": {
+    "cl100k_base": "eng_Latn",
+    "o200k_base": "eng_Latn"
+  }
+}
