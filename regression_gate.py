@@ -36,15 +36,47 @@ BASELINE = "cl100k_base"
 CANDIDATE = "o200k_base"
 
 
-def per_sentence_counts(corpus, langs, vocab):
-    """{lang: [tokens per sentence]} for one vocabulary, sentences aligned."""
+def load_encoder(spec, pat_str=None):
+    """Resolve a vocabulary spec into an object with .encode(text) -> [ids].
+
+    spec forms:
+      "o200k_base"                    a tiktoken encoding name
+      "file:/path/to/vocab.tiktoken"  raw BPE ranks (needs --pat-str, or
+                                      falls back to the cl100k split regex)
+      "hf:/path/to/tokenizer.json"    a HuggingFace tokenizers file
+                                      (requires the `tokenizers` package)
+    """
+    if spec.startswith("file:"):
+        import tiktoken
+        from tiktoken.load import load_tiktoken_bpe
+        path = spec[len("file:"):]
+        ranks = load_tiktoken_bpe(path)
+        if pat_str is None:
+            pat_str = tiktoken.get_encoding("cl100k_base")._pat_str
+        return tiktoken.Encoding(name=os.path.basename(path), pat_str=pat_str,
+                                 mergeable_ranks=ranks, special_tokens={})
+    if spec.startswith("hf:"):
+        from tokenizers import Tokenizer
+
+        class _HFEncoder:
+            def __init__(self, tok):
+                self._tok = tok
+
+            def encode(self, text):
+                return self._tok.encode(text).ids
+
+        return _HFEncoder(Tokenizer.from_file(spec[len("hf:"):]))
     import tiktoken
-    enc = tiktoken.get_encoding(vocab)
+    return tiktoken.get_encoding(spec)
+
+
+def per_sentence_counts(corpus, langs, encoder):
+    """{lang: [tokens per sentence]} for one vocabulary, sentences aligned."""
     devtest = os.path.join(corpus, "devtest")
     out = {}
     for lang in langs:
         lines = read_lines(os.path.join(devtest, f"{lang}.devtest"))
-        out[lang] = [len(enc.encode(s)) for s in lines]
+        out[lang] = [len(encoder.encode(s)) for s in lines]
     return out
 
 
@@ -63,15 +95,16 @@ def bootstrap_ci(diffs, iters, rng, alpha):
     return lo, hi
 
 
-def run_gate(corpus, baseline, candidate, pivot, iters, alpha, floor, seed):
+def run_gate(corpus, baseline_enc, candidate_enc, baseline, candidate, pivot,
+             iters, alpha, floor, seed):
     devtest = os.path.join(corpus, "devtest")
     langs = sorted(f[: -len(".devtest")] for f in os.listdir(devtest)
                    if f.endswith(".devtest"))
     if pivot not in langs:
         raise SystemExit(f"pivot {pivot} missing from corpus")
 
-    base = per_sentence_counts(corpus, langs, baseline)
-    cand = per_sentence_counts(corpus, langs, candidate)
+    base = per_sentence_counts(corpus, langs, baseline_enc)
+    cand = per_sentence_counts(corpus, langs, candidate_enc)
     n = len(base[pivot])
     rng = random.Random(seed)
 
@@ -113,8 +146,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data-dir", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"))
-    ap.add_argument("--baseline", default=BASELINE)
-    ap.add_argument("--candidate", default=CANDIDATE)
+    ap.add_argument("--baseline", default=BASELINE,
+                    help="baseline vocab: a tiktoken name, file:<.tiktoken>, or hf:<tokenizer.json>")
+    ap.add_argument("--candidate", default=CANDIDATE,
+                    help="candidate vocab: a tiktoken name, file:<.tiktoken>, or hf:<tokenizer.json>")
+    ap.add_argument("--pat-str", default=None,
+                    help="split regex for a file: vocab (default: cl100k pattern)")
     ap.add_argument("--pivot", default=PIVOT)
     ap.add_argument("--iters", type=int, default=2000)
     ap.add_argument("--alpha", type=float, default=0.05)
@@ -125,8 +162,11 @@ def main():
     args = ap.parse_args()
 
     corpus = fetch_corpus(args.data_dir)
-    report = run_gate(corpus, args.baseline, args.candidate, args.pivot,
-                      args.iters, args.alpha, args.floor, args.seed)
+    baseline_enc = load_encoder(args.baseline, args.pat_str)
+    candidate_enc = load_encoder(args.candidate, args.pat_str)
+    report = run_gate(corpus, baseline_enc, candidate_enc, args.baseline,
+                      args.candidate, args.pivot, args.iters, args.alpha,
+                      args.floor, args.seed)
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump(report, fh, indent=2, ensure_ascii=False)
 

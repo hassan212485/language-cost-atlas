@@ -1,1 +1,3 @@
 tiktoken>=0.7.0
+# optional: only for scoring hf:/tokenizer.json vocabularies
+# tokenizers

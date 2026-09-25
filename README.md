@@ -70,9 +70,70 @@ The script downloads FLORES-200 (25 MB, third-party, not committed), verifies
 204 language files, tokenizes every sentence with both vocabularies, and writes
 `atlas.csv` and `summary.json`. Needs `tiktoken` only.
 
+## The regression gate
+
+A vocabulary generation can silently make a language more expensive. The gate
+is a public checker that scores any candidate vocabulary against this atlas and
+fails if a language's token tax regresses.
+
+A flat threshold is the wrong instrument: two of the three known regressions
+are ~1% moves, so a 2% cutoff would sleep through them. A vocabulary swap is a
+paired experiment (the same 1,012 sentences, tokenized twice), so the gate runs
+a paired test over sentences instead.
+
+Per language, it computes the paired difference of the tax ratio against
+`eng_Latn` and fails the language when the one-sided 95% bootstrap CI of that
+mean lies entirely above 0 **and** the relative change clears a materiality
+floor (default 0.5%). Exit code is 1 when anything regresses.
+
+Reproduce the gate on the known `cl100k_base -> o200k_base` case:
+
+```bash
+python3 regression_gate.py
+```
+
+That prints the three reds and exits 1:
+
+```
+REGRESS (3): sat_Olck, tzm_Tfng, taq_Tfng
+  sat_Olck       12.738   +7.568%  CI[+0.9439,+0.9801]
+  taq_Tfng       10.098   +1.032%  CI[+0.0884,+0.1288]
+  tzm_Tfng       10.032   +1.071%  CI[+0.0911,+0.1215]
+```
+
+### Score any vocabulary
+
+`--baseline` and `--candidate` each take one of:
+
+- a tiktoken encoding name, e.g. `o200k_base`
+- `file:/path/to/vocab.tiktoken` — raw BPE ranks (`--pat-str` sets the split
+  regex; defaults to the cl100k pattern)
+- `hf:/path/to/tokenizer.json` — a HuggingFace tokenizers file (needs the
+  `tokenizers` package)
+
+```bash
+python3 regression_gate.py --baseline cl100k_base --candidate file:/path/to/new.tiktoken
+```
+
+Tune with `--iters`, `--alpha`, `--floor`, `--pivot`, `--seed`. The report
+lands in `gate_report.json` (one row per language, with CI bounds).
+
+### Verify the documented path
+
+```bash
+python3 verify_gate.py
+```
+
+Runs the README command exactly as written and checks it reproduces
+`sat_Olck`, `tzm_Tfng`, `taq_Tfng`. Green only if the docs and the code still
+agree.
+
 ## Files
 
 - `token_atlas.py` — the whole pipeline, one file
+- `regression_gate.py` — scores a candidate vocabulary, fails on regression
+- `verify_gate.py` — runs the documented gate command and checks the result
+- `gate_report.json` — the gate's last report, one row per language
 - `atlas.csv` — one row per language: token totals, ratios, chars-per-token
 - `summary.json` — corpus facts and the aggregate numbers
 - `atlas-post.md` — the short public write-up
