@@ -85,8 +85,9 @@ Per language, it computes the paired difference of the tax ratio against
 `eng_Latn` and fails the language when the one-sided 95% lower confidence
 bound of that mean clears 0 **and** the relative change clears a materiality
 floor (default 0.5%). One-sided on purpose: a gate that stays quiet on a real
-regression is worse than one that flags a marginal case. Exit code is 1 when
-anything regresses.
+regression is worse than one that flags a marginal case. Exit codes are
+distinct so a crash cannot pass for a red: **2** when a language regresses,
+**1** on any error, **0** when clean.
 
 Every `devtest` file must be line-aligned with the pivot, or the paired
 comparison is meaningless; the gate exits with a named error instead of
@@ -98,7 +99,7 @@ Reproduce the gate on the known `cl100k_base -> o200k_base` case:
 python3 regression_gate.py
 ```
 
-That prints the three reds and exits 1:
+That prints the three reds and exits 2:
 
 ```
 REGRESS (3): sat_Olck, tzm_Tfng, taq_Tfng
@@ -132,8 +133,11 @@ python3 verify_gate.py
 ```
 
 Runs the README command exactly as written and checks it reproduces
-`sat_Olck`, `tzm_Tfng`, `taq_Tfng`. Green only if the docs and the code still
-agree.
+`sat_Olck`, `tzm_Tfng`, `taq_Tfng`. It moves the committed
+`gate_report.json` aside first, so it can only read a report this run just
+wrote (a stale artifact cannot masquerade as evidence), and it fails on any
+exit code other than 2, so a gate that crashes reads as a failure, not as a
+red. Green only if the docs, the committed report, and the code still agree.
 
 ## Files
 

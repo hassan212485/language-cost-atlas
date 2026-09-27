@@ -16,11 +16,14 @@ Criterion (per language L, pivot P):
     entirely above 0 AND the relative change is at least --floor (default
     0.5%), so statistically-real but immaterial drift is not a failure.
 
-Exit code is 1 when any language regresses, 0 otherwise. That is the gate.
+Exit codes are distinct so a crash cannot masquerade as a red:
+    0  clean — no language regressed
+    2  regressions found — the gate failed
+    1  error — bad input, missing dependency, unaligned corpus
 
 Reproduces the known cl100k_base -> o200k_base case:
     python3 regression_gate.py
-    -> REGRESS: sat_Olck, tzm_Tfng, taq_Tfng  (exit 1)
+    -> REGRESS: sat_Olck, tzm_Tfng, taq_Tfng  (exit 2)
 """
 
 import argparse
@@ -34,6 +37,10 @@ from token_atlas import fetch_corpus, read_lines, PIVOT  # noqa: E402
 
 BASELINE = "cl100k_base"
 CANDIDATE = "o200k_base"
+
+EXIT_CLEAN = 0
+EXIT_ERROR = 1
+EXIT_REGRESSION = 2
 
 
 def load_encoder(spec, pat_str=None):
@@ -182,9 +189,14 @@ def main():
     ap.add_argument("--out", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "gate_report.json"))
     args = ap.parse_args()
 
-    corpus = fetch_corpus(args.data_dir)
-    baseline_enc = load_encoder(args.baseline, args.pat_str)
-    candidate_enc = load_encoder(args.candidate, args.pat_str)
+    try:
+        corpus = fetch_corpus(args.data_dir)
+        baseline_enc = load_encoder(args.baseline, args.pat_str)
+        candidate_enc = load_encoder(args.candidate, args.pat_str)
+    except ImportError as exc:
+        print(f"error: missing dependency ({exc}). "
+              "Run: pip install -r requirements.txt", file=sys.stderr)
+        return EXIT_ERROR
     report = run_gate(corpus, baseline_enc, candidate_enc, args.baseline,
                       args.candidate, args.pivot, args.iters, args.alpha,
                       args.floor, args.seed)
@@ -199,9 +211,10 @@ def main():
             if f["regressed"]:
                 print(f"  {f['language']:12} {f['ratio_baseline']:8.3f}  "
                       f"{f['relative_change_pct']:+7.3f}%  CI[{f['ci_low']:+.4f},{f['ci_high']:+.4f}]")
-        sys.exit(1)
+        return EXIT_REGRESSION
     print("PASS: no language regressed")
+    return EXIT_CLEAN
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
