@@ -82,9 +82,15 @@ paired experiment (the same 1,012 sentences, tokenized twice), so the gate runs
 a paired test over sentences instead.
 
 Per language, it computes the paired difference of the tax ratio against
-`eng_Latn` and fails the language when the one-sided 95% bootstrap CI of that
-mean lies entirely above 0 **and** the relative change clears a materiality
-floor (default 0.5%). Exit code is 1 when anything regresses.
+`eng_Latn` and fails the language when the one-sided 95% lower confidence
+bound of that mean clears 0 **and** the relative change clears a materiality
+floor (default 0.5%). One-sided on purpose: a gate that stays quiet on a real
+regression is worse than one that flags a marginal case. Exit code is 1 when
+anything regresses.
+
+Every `devtest` file must be line-aligned with the pivot, or the paired
+comparison is meaningless; the gate exits with a named error instead of
+crashing or silently truncating.
 
 Reproduce the gate on the known `cl100k_base -> o200k_base` case:
 
@@ -96,9 +102,9 @@ That prints the three reds and exits 1:
 
 ```
 REGRESS (3): sat_Olck, tzm_Tfng, taq_Tfng
-  sat_Olck       12.738   +7.568%  CI[+0.9439,+0.9801]
-  taq_Tfng       10.098   +1.032%  CI[+0.0884,+0.1288]
-  tzm_Tfng       10.032   +1.071%  CI[+0.0911,+0.1215]
+  sat_Olck       12.738   +7.568%  CI[+0.9370,+0.9915]
+  taq_Tfng       10.098   +1.032%  CI[+0.0857,+0.1239]
+  tzm_Tfng       10.032   +1.071%  CI[+0.0890,+0.1262]
 ```
 
 ### Score any vocabulary
@@ -116,7 +122,8 @@ python3 regression_gate.py --baseline cl100k_base --candidate file:/path/to/new.
 ```
 
 Tune with `--iters`, `--alpha`, `--floor`, `--pivot`, `--seed`. The report
-lands in `gate_report.json` (one row per language, with CI bounds).
+lands in `gate_report.json` (one row per language, with the two-sided 95% CI
+and the one-sided flag bound).
 
 ### Verify the documented path
 

@@ -81,7 +81,16 @@ def per_sentence_counts(corpus, langs, encoder):
 
 
 def bootstrap_ci(diffs, iters, rng, alpha):
-    """One-sided lower bound and two-sided CI of the mean of paired diffs."""
+    """Bootstrap percentiles of the mean of paired diffs.
+
+    Returns (lo_one, ci_low, ci_high):
+      lo_one  — the one-sided (1-alpha) lower confidence bound (the alpha
+                percentile). This is the flag threshold; the gate fails a
+                language only when lo_one clears 0. A one-sided bound is the
+                right instrument here: the gate should run loud, and a
+                missed regression is worse than an extra flag.
+      ci_low/ci_high — the two-sided (1-alpha) interval, reported for context.
+    """
     n = len(diffs)
     means = []
     for _ in range(iters):
@@ -90,9 +99,10 @@ def bootstrap_ci(diffs, iters, rng, alpha):
             s += diffs[rng.randrange(n)]
         means.append(s / n)
     means.sort()
-    lo = means[int((alpha / 2) * iters)]
-    hi = means[int((1 - alpha / 2) * iters)]
-    return lo, hi
+    lo_one = means[int(alpha * iters)]
+    ci_low = means[int((alpha / 2) * iters)]
+    ci_high = means[int((1 - alpha / 2) * iters)]
+    return lo_one, ci_low, ci_high
 
 
 def run_gate(corpus, baseline_enc, candidate_enc, baseline, candidate, pivot,
@@ -106,6 +116,16 @@ def run_gate(corpus, baseline_enc, candidate_enc, baseline, candidate, pivot,
     base = per_sentence_counts(corpus, langs, baseline_enc)
     cand = per_sentence_counts(corpus, langs, candidate_enc)
     n = len(base[pivot])
+    # Every devtest file must be line-aligned with the pivot, or the paired
+    # comparison is meaningless. Fail loud rather than crash on an IndexError
+    # or silently truncate to the pivot's length.
+    for lang in langs:
+        nb, nc = len(base[lang]), len(cand[lang])
+        if nb != n or nc != n:
+            raise SystemExit(
+                f"corpus is not aligned: {lang} has {nb} baseline / {nc} "
+                f"candidate sentences vs pivot {pivot} with {n}; every "
+                f"devtest file must have the same number of lines")
     rng = random.Random(seed)
 
     findings = []
@@ -115,14 +135,15 @@ def run_gate(corpus, baseline_enc, candidate_enc, baseline, candidate, pivot,
         mean = sum(diffs) / n
         old_ratio = sum(base[lang]) / sum(base[pivot])
         rel = 100.0 * mean / old_ratio if old_ratio else 0.0
-        lo, hi = bootstrap_ci(diffs, iters, rng, alpha)
-        regressed = lo > 0 and rel >= floor
+        lo_one, ci_low, ci_high = bootstrap_ci(diffs, iters, rng, alpha)
+        regressed = lo_one > 0 and rel >= floor
         findings.append({
             "language": lang,
             "ratio_baseline": round(old_ratio, 4),
             "relative_change_pct": round(rel, 3),
-            "ci_low": round(lo, 4),
-            "ci_high": round(hi, 4),
+            "ci_low": round(ci_low, 4),
+            "ci_high": round(ci_high, 4),
+            "one_sided_lo": round(lo_one, 4),
             "regressed": regressed,
         })
 
