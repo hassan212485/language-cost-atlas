@@ -183,3 +183,18 @@ Tokenizers: https://github.com/openai/tiktoken
 ## License
 
 MIT. The FLORES-200 corpus is licensed by its authors, not by this repo.
+
+## Auditing one candidate vocabulary
+
+`audit_vocab.py` runs a single candidate tokenizer over the same 1,012 FLORES-200 devtest sentences in all 204 languages and reports, per language: total tokens, chars/token, the tax ratio vs `eng_Latn` under that vocabulary and under `cl100k_base`, and whether `decode(encode(x)) == x` holds for every sentence.
+
+```
+python3 audit_vocab.py --candidate=hf:/path/to/tokenizer.json --out=audit_report.json
+```
+
+Two things it refuses to hide:
+
+- a vocabulary that does not round-trip is not cheaper, it is lossy, so losslessness is reported per language, not assumed;
+- chars/token is the honest cross-vocabulary number. A vocabulary built for one language makes English itself more expensive, which flatters every other language's ratio. The script prints both so the flattery stays visible.
+
+Worked example: **Hindko Tokenizer v1.0.0** (`junaid008/hindko-tokenizer`, 32K SentencePiece Unigram, Urdu script) — 100% of the 204 languages round-trip exactly across all 1,012 sentences; `urd_Arab` costs 0.5026x `eng_Latn`; `eng_Latn` is 1.883 chars/token vs 4.855 under `cl100k_base`; mean ratio vs English 2.16 (vs 3.36 under `cl100k_base`). FLORES has no `pan_Arab`, so the model's Shahmukhi Punjabi claim is untested here, not tested and failed.
