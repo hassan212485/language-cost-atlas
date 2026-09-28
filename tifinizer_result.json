@@ -1,0 +1,40 @@
+{
+  "tokenizer": "Tamazight/Tifinizer-Unigram-32K",
+  "algorithm": "SentencePiece/Unigram",
+  "vocab": 32000,
+  "corpus": "FLORES-200 devtest, 1012 sentences",
+  "pivot": "eng_Latn",
+  "languages": {
+    "eng_Latn": {
+      "sentences": 1012,
+      "chars": 131966,
+      "tokens": 38898,
+      "chars_per_token": 3.393,
+      "roundtrip_exact": 1012,
+      "roundtrip_chars_lost": [],
+      "ratio_vs_eng": 1.0
+    },
+    "taq_Tfng": {
+      "sentences": 1012,
+      "chars": 123925,
+      "tokens": 83113,
+      "chars_per_token": 1.491,
+      "roundtrip_exact": 991,
+      "roundtrip_chars_lost": [
+        "SPACE"
+      ],
+      "ratio_vs_eng": 2.1367
+    },
+    "tzm_Tfng": {
+      "sentences": 1012,
+      "chars": 117981,
+      "tokens": 37175,
+      "chars_per_token": 3.174,
+      "roundtrip_exact": 991,
+      "roundtrip_chars_lost": [
+        "SPACE"
+      ],
+      "ratio_vs_eng": 0.9557
+    }
+  }
+}

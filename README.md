@@ -42,6 +42,30 @@ on scripts someone trained a tokenizer for, taken from scripts someone didn't.
 The two Tifinagh cases sit in North Africa, which is where I live, which is how
 I noticed them at all.
 
+## A third vocabulary: does a purpose-built one fix the tail?
+
+The atlas only compares two OpenAI vocabularies. The obvious follow-up: put a
+vocabulary built *for* Tifinagh on the same 1,012 sentences. `measure_tifinizer.py`
+does exactly that with
+[Tamazight/Tifinizer-Unigram-32K](https://huggingface.co/Tamazight/Tifinizer-Unigram-32K)
+(SentencePiece / Unigram, 32,000 tokens, apache-2.0).
+
+| Language | o200k | Tifinizer 32K | chars/token (o200k → 32K) |
+|---|---|---|---|
+| Tamahaq `taq_Tfng` | 10.21x | 2.14x | 0.45 → 1.49 |
+| Central Atlas Tamazight `tzm_Tfng` | 10.15x | 0.96x | 0.43 → 3.17 |
+
+`tzm_Tfng` costs *fewer* tokens than English under a vocabulary trained for it.
+Read the ratio with care: this vocabulary spends its budget on Tifinagh, so
+English gets *more* expensive under it (3.39 chars/token vs 4.91 under o200k),
+which flatters the language side of the ratio. The pivot-free number is
+chars/token, and there the same sentences move 0.43 → 3.17, a 7x swing.
+Roundtrip: 991/1012 sentences decode exactly; the other 21 differ only by one
+dropped space from SentencePiece normalization, with no glyphs lost.
+
+So the tail is not a property of the language. It is a property of who the
+vocabulary was built for.
+
 ## The metric, and what it actually measures
 
 `ratio = tokens(meaning in language L) / tokens(same meaning in English)`,
@@ -144,6 +168,8 @@ red. Green only if the docs, the committed report, and the code still agree.
 - `token_atlas.py` — the whole pipeline, one file
 - `regression_gate.py` — scores a candidate vocabulary, fails on regression
 - `verify_gate.py` — runs the documented gate command and checks the result
+- `measure_tifinizer.py` — a third vocabulary on the same 1,012 sentences
+- `tifinizer_result.json` — that vocabulary's per-language numbers
 - `gate_report.json` — the gate's last report, one row per language
 - `atlas.csv` — one row per language: token totals, ratios, chars-per-token
 - `summary.json` — corpus facts and the aggregate numbers
